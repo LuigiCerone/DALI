@@ -1,0 +1,15 @@
+/* This type of agent is used to start the leader election algorithm. */
+
+
+/* We suppose to use 4 agents in a ring network. */
+startE :> print('Starting LE...'), 
+            messageA(agent0,send_message(init(0),Me)),
+            messageA(agent1,send_message(init(1),Me)),
+            messageA(agent2,send_message(init(2),Me)),
+            messageA(agent3,send_message(init(3),Me)).
+
+leaderE(Id) :> print('Result from algorithm... '),
+                print('Node '), print(Id), print(' is the leader.'),nl.
+
+
+/* To run send send_message(start,agent2).*/
