@@ -2,7 +2,7 @@
 #exec 1>/dev/null # @echo off
 clear # cls
 #title "MAS"
-sicstus_home=/usr/local/sicstus4.3.5
+sicstus_home=/usr/local/sicstus4.4.1
 #sicstus_home=/usr/local/sicstus4.2.3
 main_home=../..
 dali_home=../../src
