@@ -1,1 +1,2 @@
-send_message(send_message(reply(3,2,0,1),_70929))
+send_message(send_message(election(2,2,0,1),_35773))
+send_message(send_message(reply(3,2,0,1),_7117))

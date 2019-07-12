@@ -1,4 +1,3 @@
-send_message(send_message(election(3,3,0,1),_70345))
-send_message(send_message(election(3,3,0,1),_36761))
-send_message(send_message(test(3),agent3))
-send_message(send_message(election(3,3,1,1),agent3))
+send_message(send_message(election(3,3,0,1),_69091))
+send_message(execute_proc(handleEvent(3,3,0,1),_70023))
+send_message(execute_proc(handleEvent(3,3,1,1),_35939))
