@@ -1,5 +1,4 @@
 /* This type of agent partecipate to the leader election algorithm. */
-
 :- use_module(library(random)).
 :- use_module(library(system)).
 
@@ -7,9 +6,6 @@
 :- dynamic left/1.
 :- dynamic right/1.
 :- dynamic myid/1.
-
-:- dynamic replyLeft/1.
-:- dynamic replyRight/1.
 
 /* This method is invoked when the master node send an init message. */
 initE(Id) :> 
@@ -26,7 +22,7 @@ start(Id) :-
           right(RightAgent),
           X=agent, getAgentName(X,RightAgent,Result), 
           format(user_output, 'election(~w,~w,~w,~w)', [Id,Id,0,1]), nl,
-          messageA(Result,send_message(election(Id, Id, 0, 1), Me)).
+          messageA(Result,send_message(election([Id, Id, 0, 1]), Me)).
           
 
 /* This method is used to get the user agent name from left() and right() that is used for send_message primitive. */
@@ -37,9 +33,17 @@ getAgentName(AtomicPrefix ,NumericSuffix ,Concatenation) :-
           name(Concatenation,Codes).
 
 /* React to election msg, if the id is greater than this node's id and this node is in the boundary, forward the msg. */
-electionE(Id, SenderId, Phase, Distance) :>
+electionE(List) :>
+        unwrap(List, Id, SenderId, Phase, Distance),
         handleEvent(Id, SenderId, Phase, Distance).
 
+unwrap(List, Id, SenderId, Phase, Distance) :-
+        nth0(0, List, Id),
+        nth0(1, List, SenderId),
+        nth0(2, List, Phase),
+        nth0(3, List, Distance),
+        print(unwrap_id_),print(Id),print(sender_id_),
+        print(SenderId),print(phase_),print(Phase),print(distance_),print(Distance),nl,nl.
 
 handleEvent(Id, SenderId, Phase, Distance) :-
          print(election_chiamato_from_),print(SenderId), nl,
@@ -49,24 +53,51 @@ handleEvent(Id, SenderId, Phase, Distance) :-
                         FDistance is Distance/1,
                       (
                         FDistance =:= 2**Phase -> print(fdistance_uguale_duephase),nl, sendReply(Id, SenderId, Phase, Distance);
-                        FDistance < 2**Phase -> print(fdistance_minore_duephase),nl, NewDist is Distance + 1, forwardElection(Id, MyId, Phase, NewDist);
+                        FDistance < 2**Phase -> print(fdistance_minore_duephase),nl, NewDist is Distance + 1, forwardElection(Id, SenderId, Phase, NewDist);
                         print(post_instance),
                         FDistance > 2**Phase -> print(errore_fd)
                       );
             Id == MyId -> announce(MyId); 
-            Id < MyId -> print(non_inoltro),nl,nl
+            Id < MyId -> print(non_inoltro),nl,nl, sendTryOtherSideToAgent(Id, SenderId, Phase, Distance)
           ).
 
-announce(Id) :- messageA(agent1, send_message(leader(Id), Me)).
+announce(Id) :- 
+          nl,nl,print(end),nl,nl,
+          messageA(agent4, send_message(leader(Id), Me)),
+          halt(99).
 
+/* Parte di ritorno dietro. */
+sendTryOtherSideToAgent(AgentCode, Id, Phase, Distance) :- 
+          print(send_try_other_side_to_agent_), print(AgentCode), nl, nl,
+          X=agent, getAgentName(X, AgentCode, Result), 
+          myid(MyId),
+          L = [Id, MyId, Phase, Distance],
+          messageA(Result, send_message(otherSide(L), Me)).
+
+otherSideE(List) :> 
+          unwrap(List, Id, SenderId, Phase, Distance),
+          myid(MyId),
+          left(LeftAgent),
+          right(RightAgent),
+          print(ho_ricevuto_other_side_da_), print(SenderId), nl,
+          (
+            Id == MyId -> startNextSide(Id, Phase);
+            sendTryOtherSideToAgent(Id, SenderId, Phase, Distance)
+          ).          
+
+startNextSide(Id, Phase) :- 
+          left(LeftAgent),
+          X=agent, getAgentName(X,LeftAgent,Result),
+          L = [Id, Id,  Phase, 1],
+          messageA(Result,send_message(election(L), Me)).
 
 /* If the election comes from the node to the left, forward it to the node to the right. */
 forwardElection(Id, SenderId, Phase, NewDist) :-
           left(LeftAgent),
           right(RightAgent),
           (
-            Id == LeftAgent -> sendElectionToAgent(RightAgent, Id, Phase, NewDist);
-            Id == RightAgent -> sendElectionToAgent(LeftAgent, Id, Phase, NewDist)
+            SenderId == LeftAgent -> sendElectionToAgent(RightAgent, Id, Phase, NewDist);
+            SenderId == RightAgent -> sendElectionToAgent(LeftAgent, Id, Phase, NewDist)
           ).          
 
 sendElectionToAgent(AgentCode, Id, Phase, NewDist) :- 
@@ -74,7 +105,8 @@ sendElectionToAgent(AgentCode, Id, Phase, NewDist) :-
           myid(MyId),
           print(forward_election_from_),print(MyId),print(to),print(AgentCode),nl,
           print(forward_content_is_id_),print(Id),print(phase_),print(Phase),print(dist),print(NewDist),nl,
-          messageA(Result,send_message(election(Id, MyId, Phase, NewDist), Me)).
+          L = [Id, MyId, Phase, NewDist],
+          messageA(Result,send_message(election(L), Me)).
           
 /* messageA(Result,send_message(election(Id, MyId, Phase, NewDist), Me)). */ 
 
@@ -94,9 +126,11 @@ sendReplyToAgent(AgentCode, Id, Phase, Distance) :-
           print(send_reply_to_agent_), print(AgentCode), nl, nl,
           X=agent, getAgentName(X, AgentCode, Result), 
           myid(MyId),
-          messageA(Result, send_message(reply(Id, MyId, Phase, Distance), Me)).
+          L = [Id, MyId, Phase, Distance],
+          messageA(Result, send_message(reply(L), Me)).
 
-replyE(Id, SenderId, Phase, Distance) :> 
+replyE(List) :> 
+          unwrap(List, Id, SenderId, Phase, Distance),
           myid(MyId),
           left(LeftAgent),
           right(RightAgent),
@@ -112,22 +146,20 @@ replyE(Id, SenderId, Phase, Distance) :>
 
 replyFromLeft(Id, Phase, Distance) :- 
           left(LeftAgent),
-          assert(replyLeft(LeftAgent)),
           right(RightAgent),
-          replyRight(ReplyRight),
           print(vado_nella_next), nl, 
           goNextPhase(Phase).
 
 replyFromRight(Id, Phase, Distance) :-
           right(RightAgent),
           print(sto_eseguendo_reply_from_right), print(RightAgent), nl,
-          assert(replyRight(RightAgent)),  
           left(LeftAgent),
           X=agent, getAgentName(X,LeftAgent,Result),
           myid(MyId),
           print(torno_dietro_invio_handle_event_from),print(MyId),print(to),print(Result),print(with_val_id_),print(Id),
           print(distance_),print(Distance),print(and_phase_),print(Phase),nl,nl,
-          messageA(Result,execute_proc(handleEvent(Id, Id,  Phase, 1), Me)).
+          L = [Id, Id,  Phase, 1],
+          messageA(Result,send_message(election(L), Me)).
 
 /* If the reply comes from the node to the left, forward it to the node to the right. */
 forwardReply(Id, SenderId, Phase, Distance) :- 
@@ -147,17 +179,5 @@ goNextPhase(Phase) :-
           print(mando_a_), print(Result), nl, 
           myid(MioId),
           print(io_sono_), print(MioId), nl,
-          messageA(Result, execute_proc(handleEvent(MioId, MioId, NextPhase, 1), Me)),
-          print(ho_inviato).
-
-testE(Id) :> 
-      print(ci_sono),
-      print(Id),nl,
-      integer(Id),
-      print(se_stampo_allora_id_is_intero),nl.
-
-t(Id) :- print(sasa_), print(Id), nl.
-
-
-/* FUNZIONA: messageA(Result,send_message(election(3, 3, NextPhase, 1), This)). */
-/* NON FUNZIONA: messageA(Result,send_message(election(MioId, MioId, NextPhase, 1), This)). */
+          L = [MioId, MioId, NextPhase, 1],
+          messageA(Result, send_message(election(L), Me)).
