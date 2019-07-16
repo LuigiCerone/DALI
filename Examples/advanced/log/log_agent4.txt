@@ -1,4 +1,0 @@
-send_message(send_message(init(0),_954113))
-send_message(send_message(init(1),_954081))
-send_message(send_message(init(2),_954053))
-send_message(send_message(init(3),_954025))

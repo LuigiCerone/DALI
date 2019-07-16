@@ -12,4 +12,4 @@ leaderE(Id) :> print('Result from algorithm... '),
                 print('Node '), print(Id), print(' is the leader.'),nl.
 
 
-/* To run send send_message(start,agent2).*/
+/* To run send a message to agent4 from agent0 with contents send_message(start,agent0). */

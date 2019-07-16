@@ -1,5 +1,166 @@
-% Example of if to test if a number is positive.
-val(X) :- 
-  (   X < 0 -> print('X is negative. Failing now'), fail;
-     X == 0 -> print('X is zero');   
-    print('X is positive')).
+/* This type of agent partecipate to the leader election algorithm. */
+
+:- use_module(library(random)).
+:- use_module(library(system)).
+
+/* left and right are dynamic clauses used to remember which agents are to the left and right of the current. They contain the ID of the agents. */
+:- dynamic left/1.
+:- dynamic right/1.
+:- dynamic myid/1.
+
+/* This method is invoked when the master node send an init message. It calculates the ID of the current agent and,
+based on it, the ids of the left and right agents. Then a message with election is sent to the right agent. */
+initE(Id) :-
+          print('Agent init->'), 
+          print('Id:'), print(Id), nl,
+          assert(myid(Id)),
+          L is (Id-1) mod 4, assert(left(L)),
+          R is (Id+1) mod 4, assert(right(R)),
+          print('dx:'),print(R),print(' sx:'),print(L),nl,
+          right(RightAgent),
+          X=agent, getAgentName(X,RightAgent,Result), 
+          format(user_output, 'election(~w,~w,~w,~w)', [Id,Id,0,1]), nl.
+          
+/* This method is used to get the user agent name from left() and right() that is used for send_message primitive. 
+Basically starting from the agent's ID for example 3 it computes agent3. */
+getAgentName(AtomicPrefix ,NumericSuffix ,Concatenation) :-
+          name(AtomicPrefix, Pfx),
+          name(NumericSuffix, Sfx),
+          append(Pfx,Sfx,Codes),
+          name(Concatenation,Codes).
+
+/* React to election msg after the unwrap of the list parameter recevied, if the id is greater than this node's id there are
+three different cases: if this node is the boundary then it sends a reply msg, if this node is contained within the 2^Phase distance
+it forwards the msg. If the id contained in the election message just recevied is equal to this current node ID, this means that our id travelled 
+all the ring and we are the leader. If the id contained in the election message is less than ours then we don't forward it.   */
+electionE(List) :-
+        unwrap(List, Id, SenderId, Phase, Distance),
+        print(election_chiamato_from_),print(SenderId), nl,
+         myid(MyId),
+          ( 
+            Id > MyId -> 
+                        FDistance is Distance/1,
+                      (
+                        FDistance =:= 2**Phase -> print(fdistance_uguale_duephase),nl, sendReply(Id, SenderId, Phase, Distance);
+                        FDistance < 2**Phase -> print(fdistance_minore_duephase),nl, NewDist is Distance + 1, forwardElection(Id, SenderId, Phase, NewDist);
+                        print(post_instance),
+                        FDistance > 2**Phase -> print(errore_fd)
+                      );
+            Id == MyId -> announce(MyId); 
+            Id < MyId -> print(non_inoltro),nl,nl
+          ).
+
+/* Given a list that contains all the params, this method unwraps the content and return each value in a specific variable. */
+unwrap(List, Id, SenderId, Phase, Distance) :-
+        nth0(0, List, Id),
+        nth0(1, List, SenderId),
+        nth0(2, List, Phase),
+        nth0(3, List, Distance),
+        print(unwrap_id_),print(Id),print(sender_id_),
+        print(SenderId),print(phase_),print(Phase),print(distance_),print(Distance),nl,nl.
+         
+/* This method is used to announce the leader to the master agent. */
+announce(Id) :- 
+          nl,nl,print(end),nl,nl.
+
+/* This method is used to send a forward message to the agent. If the election comes from the node to the left, 
+forward it to the node to the right. And viceversa.
+This method is superfluous, in fact it could be replaced by sendElectionToAgent(SenderId, Id, Phase, NewDist).
+We have decided to keep it because it helps in the understanding of the algorithm implementation. */
+forwardElection(Id, SenderId, Phase, NewDist) :-
+          left(LeftAgent),
+          right(RightAgent),
+          (
+            SenderId == LeftAgent -> sendElectionToAgent(RightAgent, Id, Phase, NewDist);
+            SenderId == RightAgent -> sendElectionToAgent(LeftAgent, Id, Phase, NewDist)
+          ).          
+
+/* This method is used to send the election message from the current agent to the given one. */
+sendElectionToAgent(AgentCode, Id, Phase, NewDist) :- 
+          X=agent, getAgentName(X, AgentCode, Result), 
+          myid(MyId),
+          print(forward_election_from_),print(MyId),print(to),print(AgentCode),nl,
+          print(forward_content_is_id_),print(Id),print(phase_),print(Phase),print(dist),print(NewDist),nl,
+          L = [Id, MyId, Phase, NewDist].
+          
+/* This method is used to send a reply message to the agent. If the reply comes from the node to the left, 
+forward it to the node to the left. And viceversa.
+This method is superfluous, in fact it could be replaced by sendReplyToAgent(SenderId, Id, Phase, NewDist).
+We have decided to keep it because it helps in the understanding of the algorithm implementation.*/ 
+sendReply(Id, SenderId, Phase, Distance) :- 
+          myid(MyId),
+          print(send_reply_from_user_), print(MyId), nl,
+          left(LeftAgent),
+          right(RightAgent),
+          (
+            SenderId == LeftAgent -> sendReplyToAgent(LeftAgent, Id, Phase, Distance);
+            SenderId == RightAgent -> sendReplyToAgent(RightAgent, Id, Phase, Distance)
+          ).
+
+/* This method is used to send the reply message from the current agent to the given one. */
+sendReplyToAgent(AgentCode, Id, Phase, Distance) :- 
+          print(send_reply_to_agent_), print(AgentCode), nl, nl,
+          X=agent, getAgentName(X, AgentCode, Result), 
+          myid(MyId),
+          L = [Id, MyId, Phase, Distance].
+
+/* This method handles the external event reply, when an agent receives such kind of msg, it reacts
+by unwrapping the contents of the list, then it checks if the contained id is equal to its current id.
+If so there are two further cases, they are used to understand from which side (left/right) the reply comes from. 
+The the id is not equal to the current node id, then this node simply forwards the reply msg to the next node. */
+replyE(List) :- 
+          unwrap(List, Id, SenderId, Phase, Distance),
+          myid(MyId),
+          left(LeftAgent),
+          right(RightAgent),
+          print(received_a_reply_from_), print(SenderId), nl,
+          (
+            Id == MyId -> 
+                (
+                    LeftAgent == SenderId -> replyFromLeft(Id, Phase, Distance);
+                    RightAgent == SenderId -> replyFromRight(Id, Phase, Distance)
+                );
+            forwardReply(Id, SenderId, Phase, Distance)
+          ).
+
+/* When an agents receives a reply from its right this means that its id is the biggest in the 2^Phase neighborhood in the right.
+Then this agent has to test if its id is the largest also for the other side (the agents in the left). In order to do so, it sends 
+an election msg to the LeftAgent.  */
+replyFromRight(Id, Phase, Distance) :-
+          right(RightAgent),
+          print(exectuing_reply_from_right), print(RightAgent), nl,
+          left(LeftAgent),
+          X=agent, getAgentName(X,LeftAgent,Result),
+          myid(MyId),
+          print(going_back_and_sending_election_from),print(MyId),print(to),print(Result),print(with_val_id_),print(Id),
+          print(distance_),print(Distance),print(and_phase_),print(Phase),nl,nl,
+          L = [Id, Id,  Phase, 1].
+
+/* When an agents received a reply from left this means that its id is the bigger in the 2^Phase neighborhood in the left AND,
+given the execution of the previous predicate, its id is also the larger in the right neighborhood. So this agent can proceed to
+the next phase.*/
+replyFromLeft(Id, Phase, Distance) :- 
+          left(LeftAgent),
+          right(RightAgent),
+          print(vado_nella_next), nl, 
+          goNextPhase(Phase).
+
+/* If the reply comes from the node to the left, forward it to the node to the right. */
+forwardReply(Id, SenderId, Phase, Distance) :- 
+          left(LeftAgent),
+          right(RightAgent),
+          (
+              SenderId == LeftAgent -> sendReplyToAgent(RightAgent, Id, Phase, Distance);
+              SenderId == RightAgent -> sendReplyToAgent(LeftAgent, Id, Phase, Distance)
+          ).
+
+/* When an agent recevies both replies, it can proceed to the next phase. */
+goNextPhase(Phase) :-
+          print(sono_go_next_phase),nl,
+          NextPhase is Phase + 1,
+          right(RightAgent), myid(MyId),
+          X=agent, getAgentName(X,RightAgent,Result),
+          myid(MyId),
+          L = [MyId, MyId, NextPhase, 1],
+          nl,nl,print(new_phase_is_starting),nl,nl,
+          messageA(Result, send_message(election(L), Me)).
