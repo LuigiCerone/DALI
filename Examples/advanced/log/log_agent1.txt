@@ -1,4 +1,4 @@
 send_message(send_message(election([1,1,0,1]),_31191))
-send_message(send_message(reply([3,1,1,2]),_62529))
-send_message(send_message(reply([3,1,1,2]),_33019))
+send_message(send_message(reply([3,1,1,2]),_33047))
+send_message(send_message(reply([3,1,1,2]),_62577))
 send_message(send_message(election([3,1,2,3]),_63461))
